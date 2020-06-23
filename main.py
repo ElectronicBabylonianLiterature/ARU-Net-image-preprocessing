@@ -20,6 +20,25 @@ def remove_baselines(file):
     return tree
 
 
+def sort_img_sizes():
+    mypath = 'data_labelled'
+    files = [f for f in listdir(mypath) if isfile(join(mypath, f))]
+    sizes = dict()
+    for file in files:
+        tree = ET.parse(f'{mypath}/{file}')
+        root = tree.getroot()
+        height = int(root.attrib['height'])
+        width = int(root.attrib['width'])
+        sizes[file] = {"h": height, "w": width, "s": height * width}
+    return {k: v for k, v in sorted(sizes.items(), key=lambda item: -item[1]['s'])}
+
+
+def pretty_print_dict(sizes):
+    for i, j in list(sizes.items()):
+        print(f'{i:40}{str(j):4}')
+    print("#################################\n")
+
+
 # extract labels(baselines) and change color to white and background to black
 def extract_baselines(file):
     tree = ET.parse(file)
@@ -62,33 +81,56 @@ def delete_old_files():
         os.remove(f)
 
 
-def create_data():
+def calc_scale(total_size, max_size):
+    if total_size <= max_size:
+        return 1
+    else:
+        return round(max_size/total_size, 2)
+
+
+def create_data(sorted_imgs, max_size, to_scale):
     mypath = 'data_labelled'
     files = [f for f in listdir(mypath) if isfile(join(mypath, f))]
 
+    scaling_counter = 0
     counter = 0
     total = len(files)
     for file in files:
+        path = f'{mypath}/{file}'
+
+        if to_scale:
+            scale = calc_scale(sorted_imgs[file]["s"], max_size)
+            if scale < 1:
+                scaling_counter = scaling_counter + 1
+        else:
+            scale = 1
+
         file_ = file.replace(".svg", "")
 
         counter = counter + 1
-        print(f'{file:40}{counter:4} of{total:4}')
-        tree_original = remove_baselines(f'{mypath}/{file}')
+        print(f'{file:40}{counter:4} of{total:4}   scaling-factor: {scale}')
+        tree_original = remove_baselines(path)
         tree_original.write(f'data_labelled_svg/{file}')
-        svg2png(bytestring=open(f'data_labelled_svg/{file}', 'rb').read(),
+        svg2png(bytestring=open(f'data_labelled_svg/{file}', 'rb').read(), scale=scale,
                 write_to=open(f'data_labelled_jpg/{file_}.jpg', 'wb'))
         convert_to_greyscale(f'data_labelled_jpg/{file_}.jpg')
 
-        tree_labels = extract_baselines(f'{mypath}/{file}')
+        tree_labels = extract_baselines(path)
         tree_labels.write(f'./data_labelled_svg/{file_}_GT0.svg')
-        svg2png(bytestring=open(f'./data_labelled_svg/{file_}_GT0.svg', 'rb').read(),
+        svg2png(bytestring=open(f'./data_labelled_svg/{file_}_GT0.svg', 'rb').read(), scale=scale,
                 write_to=open(f'data_labelled_jpg/{file_}_GT0.jpg', 'wb'))
         convert_to_binary(f'data_labelled_jpg/{file_}_GT0.jpg')
 
+    print(f"\n------total pictures scaled: {scaling_counter}")
 
-def create_txts_with_paths(split):
+
+def create_txts_with_paths(split, sorted_dict):
+
     data = [os.path.abspath('data_labelled_jpg/'+f) for f in listdir(
         'data_labelled_jpg') if f.find("_GT") == -1]
+
+
+    #data = [os.path.abspath('data_labelled_jpg/'+f.replace('svg', 'jpg')) for f in sorted_dict]
     split = int(math.ceil(split * len(data)))
     train = data[:split]
     val = data[split:]
@@ -103,9 +145,12 @@ def create_txts_with_paths(split):
 
 
 if __name__ == "__main__":
+    MAX_SIZE = 11000000 # estimated by trial and error
+    sorted_imgs = sort_img_sizes()
+    pretty_print_dict(sorted_imgs)
     delete_old_files()
-    create_data()
-    create_txts_with_paths(0.7)
+    create_data(sorted_imgs, MAX_SIZE, True)
+    create_txts_with_paths(0.9, sorted_imgs)
 
 
 
