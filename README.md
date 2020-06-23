@@ -1,2 +1,2 @@
 # ARU-Net-image-preprocessing
-Preprocessing of cuneiform tablet images for training ARU-Net
+Preprocessing of cuneiform tablet images (.svg) for training ARU-Net
