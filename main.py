@@ -102,40 +102,7 @@ def create_txts_with_paths(split):
         f.write(val)
 
 
-#https://arxiv.org/pdf/1802.03345.pdf page 25
-#https://en.wikipedia.org/wiki/Dilation_(morphology)
-"""
-def create_seperator_class(file):
-    tree = ET.parse(file)
-    root = tree.getroot()
-    if root.find('{http://www.w3.org/2000/svg}g'):
-        el = root.find('{http://www.w3.org/2000/svg}g')
-        el.remove(el.find('{http://www.w3.org/2000/svg}image'))
-        paths = el.findall('{http://www.w3.org/2000/svg}path')
-    else:
-        root.remove(root.find('{http://www.w3.org/2000/svg}image'))
-        paths = root.findall('{http://www.w3.org/2000/svg}path')
-
-    lines = np.empty((2, 2), float)
-    for i in paths:
-        bline_raw = i.attrib['d']
-        bline_parsed = bline_raw.split(' ')[1:]
-        if len(bline_parsed) == 2:
-          line = np.asarray([[float(i.split(',')[0]), float(i.split(',')[1])] for i in bline_parsed])
-          print(line.shape)
-          lines = np.concatenate((lines, line))
-        elif len(bline_parsed) >= 2 and bline_parsed[1] == 'c':
-            start = np.array([float(bline_parsed[0].split(',')[0]), float(bline_parsed[0].split(',')[1])])
-            first = start + np.array([float(bline_parsed[2].split(',')[0]), float(bline_parsed[2].split(',')[1])])
-    print(lines)
-
-    return tree
-"""
-
-
-
 if __name__ == "__main__":
-    #create_seperator_class('/home/yunusc/PycharmProjects/svg-preproccesing/data_labelled/e2.svg')
     delete_old_files()
     create_data()
     create_txts_with_paths(0.7)
