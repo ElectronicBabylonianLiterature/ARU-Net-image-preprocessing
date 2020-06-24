@@ -27,8 +27,8 @@ def sort_img_sizes():
     for file in files:
         tree = ET.parse(f'{mypath}/{file}')
         root = tree.getroot()
-        height = int(root.attrib['height'])
-        width = int(root.attrib['width'])
+        height = float(root.attrib['height'])
+        width = float(root.attrib['width'])
         sizes[file] = {"h": height, "w": width, "s": height * width}
     return {k: v for k, v in sorted(sizes.items(), key=lambda item: -item[1]['s'])}
 
@@ -81,11 +81,13 @@ def delete_old_files():
         os.remove(f)
 
 
-def calc_scale(total_size, max_size):
-    if total_size <= max_size:
-        return 1
+def calc_scale(max_size):
+    if max_size <= 2000:
+        return 0.5
+    elif 2000 <= max_size <= 4800:
+        return 0.33
     else:
-        return round(max_size/total_size, 2)
+        return 0.25
 
 
 def create_data(sorted_imgs, max_size, to_scale):
@@ -99,7 +101,7 @@ def create_data(sorted_imgs, max_size, to_scale):
         path = f'{mypath}/{file}'
 
         if to_scale:
-            scale = calc_scale(sorted_imgs[file]["s"], max_size)
+            scale = calc_scale(max(sorted_imgs[file]["h"],sorted_imgs[file]["w"]))
             if scale < 1:
                 scaling_counter = scaling_counter + 1
         else:
@@ -119,18 +121,17 @@ def create_data(sorted_imgs, max_size, to_scale):
         tree_labels.write(f'./data_labelled_svg/{file_}_GT0.svg')
         svg2png(bytestring=open(f'./data_labelled_svg/{file_}_GT0.svg', 'rb').read(), scale=scale,
                 write_to=open(f'data_labelled_jpg/{file_}_GT0.jpg', 'wb'))
-        convert_to_binary(f'data_labelled_jpg/{file_}_GT0.jpg')
+        #convert_to_binary(f'data_labelled_jpg/{file_}_GT0.jpg')
 
     print(f"\n------total pictures scaled: {scaling_counter}")
 
 
 def create_txts_with_paths(split, sorted_dict):
 
-    data = [os.path.abspath('data_labelled_jpg/'+f) for f in listdir(
-        'data_labelled_jpg') if f.find("_GT") == -1]
+    #data = [os.path.abspath('data_labelled_jpg/'+f) for f in listdir('data_labelled_jpg') if f.find("_GT") == -1]
 
 
-    #data = [os.path.abspath('data_labelled_jpg/'+f.replace('svg', 'jpg')) for f in sorted_dict]
+    data = [os.path.abspath('data_labelled_jpg/'+f.replace('svg', 'jpg')) for f in sorted_dict]
     split = int(math.ceil(split * len(data)))
     train = data[:split]
     val = data[split:]
@@ -145,12 +146,12 @@ def create_txts_with_paths(split, sorted_dict):
 
 
 if __name__ == "__main__":
-    MAX_SIZE = 11000000 # estimated by trial and error
+    MAX_SIZE = 10000000 # estimated by trial and error
     sorted_imgs = sort_img_sizes()
     pretty_print_dict(sorted_imgs)
     delete_old_files()
     create_data(sorted_imgs, MAX_SIZE, True)
-    create_txts_with_paths(0.9, sorted_imgs)
+    create_txts_with_paths(0.8, sorted_imgs)
 
 
 
