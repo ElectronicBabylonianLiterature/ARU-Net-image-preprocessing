@@ -1,3 +1,4 @@
+import copy
 import xml.etree.ElementTree as ET
 from cairosvg import svg2png
 from os import listdir
@@ -9,6 +10,8 @@ from matplotlib import pyplot as plt
 import numpy as np
 import math
 
+
+from svg.path import parse_path
 
 # remove labels (black baselines)
 def remove_baselines(file):
@@ -40,7 +43,7 @@ def pretty_print_dict(sizes):
 
 
 # extract labels(baselines) and change color to white and background to black
-def extract_baselines(file):
+def extract_baselines_1(file):
     tree = ET.parse(file)
     root = tree.getroot()
     black_background = ET.fromstring('<rect width="100%" height="100%" fill="black"/>')
@@ -56,6 +59,49 @@ def extract_baselines(file):
 
     for i in paths:
         i.attrib["style"] = i.attrib["style"].replace("stroke:#000000", "stroke:#ffffff")
+    return tree
+
+def extract_baselines_3(tree):
+    root = tree.getroot()
+    black_background = ET.fromstring('<rect width="100%" height="100%" fill="black"/>')
+    black_background.tag = '{http://www.w3.org/2000/svg}rect'
+    root.remove(root.find(black_background.tag))
+    black_background = ET.fromstring('<rect width="100%" height="100%" fill="white"/>')
+    black_background.tag = '{http://www.w3.org/2000/svg}rect'
+    root.insert(1, black_background)
+    if root.find('{http://www.w3.org/2000/svg}g'):
+        el = root.find('{http://www.w3.org/2000/svg}g')
+        paths = el.findall('{http://www.w3.org/2000/svg}path')
+    else:
+        root.remove(root.find('{http://www.w3.org/2000/svg}image'))
+        paths = root.findall('{http://www.w3.org/2000/svg}path')
+
+    for i in paths:
+        i.attrib["style"] = i.attrib["style"].replace("stroke:#ff0000",
+                                                      "stroke:#000000")
+        i.attrib["style"] = i.attrib["style"].replace("stroke:#ffffff",
+                                                      "stroke:#000000")
+    return tree
+
+def extract_baselines_hori(tree):
+    root = tree.getroot()
+    black_background = ET.fromstring('<rect width="100%" height="100%" fill="black"/>')
+    black_background.tag = '{http://www.w3.org/2000/svg}rect'
+    root.insert(1, black_background)
+    if root.find('{http://www.w3.org/2000/svg}g'):
+        el = root.find('{http://www.w3.org/2000/svg}g')
+        paths = el.findall('{http://www.w3.org/2000/svg}path')
+    else:
+        root.remove(root.find('{http://www.w3.org/2000/svg}image'))
+        paths = root.findall('{http://www.w3.org/2000/svg}path')
+
+    for i in paths:
+        if "#ffffff" in i.attrib["style"]:
+            if el:
+                el.remove(i)
+            else:
+                root.remove(i)
+        i.attrib["style"] = i.attrib["style"].replace("stroke:#ff0000", "stroke:#ffffff")
     return tree
 
 
@@ -117,11 +163,31 @@ def create_data(sorted_imgs, max_size, to_scale):
                 write_to=open(f'data_labelled_jpg/{file_}.jpg', 'wb'))
         convert_to_greyscale(f'data_labelled_jpg/{file_}.jpg')
 
-        tree_labels = extract_baselines(path)
+        tree_labels = extract_baselines_1(path)
         tree_labels.write(f'./data_labelled_svg/{file_}_GT0.svg')
-        svg2png(bytestring=open(f'./data_labelled_svg/{file_}_GT0.svg', 'rb').read(), scale=scale,
+        svg2png(bytestring=open(f'./data_labelled_svg/{file_}_GT0.svg', 'rb').read(),
+                scale=scale,
                 write_to=open(f'data_labelled_jpg/{file_}_GT0.jpg', 'wb'))
+
+        tree_labels_1 = create_seperator_class(tree_labels)
+
+        tree_labels_2 = copy.deepcopy(tree_labels_1)
+
         #convert_to_binary(f'data_labelled_jpg/{file_}_GT0.jpg')
+
+        tree_labels = extract_baselines_hori(tree_labels_1)
+        tree_labels.write(f'./data_labelled_svg/{file_}_GT1.svg')
+        svg2png(bytestring=open(f'./data_labelled_svg/{file_}_GT1.svg', 'rb').read(),
+                scale=scale,
+                write_to=open(f'data_labelled_jpg/{file_}_GT1.jpg', 'wb'))
+
+        tree_labels_2 = extract_baselines_3(tree_labels_2)
+        tree_labels_2.write(f'./data_labelled_svg/{file_}_GT2.svg')
+        svg2png(bytestring=open(f'./data_labelled_svg/{file_}_GT2.svg', 'rb').read(),
+                scale=scale,
+                write_to=open(f'data_labelled_jpg/{file_}_GT2.jpg', 'wb'))
+
+
 
     print(f"\n------total pictures scaled: {scaling_counter}")
 
@@ -145,42 +211,107 @@ def create_txts_with_paths(split, sorted_dict):
         f.write(val)
 
 
+def split_c(str):
+    return float(str.split(',')[0]), float(str.split(',')[1])
+
+
+def calc_orth(start, end):
+    vec = tuple(np.subtract(end, start))
+    orth_vec_1 = np.array([round(-vec[1], 2), round(vec[0], 2)])
+
+    #orth_vec_2 = (vec[1], -vec[0])
+
+    length = np.linalg.norm(orth_vec_1)
+    np.seterr(divide='ignore', invalid='ignore')
+    orth_vec_1_scaled = (orth_vec_1/length)*30
+    orth_vec_1_scaled = (orth_vec_1_scaled[0], orth_vec_1_scaled[1])
+    orth_vec_2_scaled = (-orth_vec_1_scaled[0], -orth_vec_1_scaled[1])
+    return [[start, orth_vec_1_scaled], [start, orth_vec_2_scaled]]
+
+def calc_sep(lines, curves):
+    vecs = []
+    if lines:
+        for x in lines:
+            start = x[0]
+            end = x[1]
+            vec1 = calc_orth(start, end)
+            vec2 = calc_orth(end ,start)
+            vecs.extend(vec1)
+            vecs.extend(vec2)
+    if curves:
+        for z in curves:
+            start = z[0]
+            end = z[1]
+            vec3 = calc_orth(start, end)
+            vecs.extend(vec3)
+
+    return vecs
+
 #https://arxiv.org/pdf/1802.03345.pdf page 25
 #https://en.wikipedia.org/wiki/Dilation_(morphology)
-"""
-def create_seperator_class(file):
-    tree = ET.parse(file)
+# this implementation creates the seperator class (no morphology whatsovever)
+
+
+def create_seperator_class(tree):
     root = tree.getroot()
+    el = None
     if root.find('{http://www.w3.org/2000/svg}g'):
         el = root.find('{http://www.w3.org/2000/svg}g')
-        el.remove(el.find('{http://www.w3.org/2000/svg}image'))
         paths = el.findall('{http://www.w3.org/2000/svg}path')
     else:
-        root.remove(root.find('{http://www.w3.org/2000/svg}image'))
         paths = root.findall('{http://www.w3.org/2000/svg}path')
 
-    lines = np.empty((2, 2), float)
+    lines = []
+    curves = []
     for i in paths:
         bline_raw = i.attrib['d']
+        try:
+            bline_raw = i.attrib['{http://www.inkscape.org/namespaces/inkscape}original-d']
+        except:
+            print("wut")
+        letter = bline_raw.split(' ')[0]
         bline_parsed = bline_raw.split(' ')[1:]
-        if len(bline_parsed) == 2:
-          line = np.asarray([[float(i.split(',')[0]), float(i.split(',')[1])] for i in bline_parsed])
-          print(line.shape)
-          lines = np.concatenate((lines, line))
+        if len(bline_parsed) == 2 and letter == 'm':
+            start = split_c(bline_parsed[0])
+            end = tuple(np.add(start, split_c(bline_parsed[1])))
+            lines.append([start, end])
+        if len(bline_parsed) == 2 and letter == 'M':
+            start = split_c(bline_parsed[0])
+            end = split_c(bline_parsed[-1])
+            lines.append([start, end])
         elif len(bline_parsed) >= 2 and bline_parsed[1] == 'c':
-            start = np.array([float(bline_parsed[0].split(',')[0]), float(bline_parsed[0].split(',')[1])])
-            first = start + np.array([float(bline_parsed[2].split(',')[0]), float(bline_parsed[2].split(',')[1])])
+            start = split_c(bline_parsed[0])
+            start_2 = tuple(np.add(start, split_c(bline_parsed[2])))
+            end = tuple(np.add(start, split_c(bline_parsed[-1])))
+            end_2 = tuple(np.subtract(end, split_c(bline_parsed[-2])))
+            if start == start_2 or end == end_2:
+                p = parse_path(bline_raw)
+                lines.append([(p[1].start.real, p[1].start.imag), (p[-1].end.real, p[-1].end.imag)])
+            else:
+                curves.append([start, start_2])
+                curves.append([end, end_2])
     print(lines)
+    print(curves)
+    vecs = calc_sep(lines, curves)
+
+    for i, j in enumerate(vecs):
+        seperator = f'<path id="sep{i}" d="m {j[0][0]},{j[0][1]} {j[1][0]},{j[1][1]}" style = "fill:none;stroke:#ff0000;stroke-width:3" />'
+        seperator = ET.fromstring(seperator)
+        seperator.tag = '{http://www.w3.org/2000/svg}path'
+        if el:
+            el.insert(-1, seperator)
+        else:
+            root.insert(-1, seperator)
 
     return tree
-"""
-
 
 
 if __name__ == "__main__":
-    #create_seperator_class('/home/yunusc/PycharmProjects/svg-preproccesing/data_labelled/e2.svg')
-    delete_old_files()
-    create_data(sorted_imgs, MAX_SIZE, True)
+    #MAX_SIZE = 10000000 # estimated by trial and error
+    sorted_imgs = sort_img_sizes()
+    #pretty_print_dict(sorted_imgs)
+    #delete_old_files()
+    #create_data(sorted_imgs, MAX_SIZE, True)
     create_txts_with_paths(0.8, sorted_imgs)
 
 
