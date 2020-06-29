@@ -20,7 +20,15 @@ def remove_baselines(file):
     paths = root.findall('{http://www.w3.org/2000/svg}path')
     for i in paths:
         root.remove(i)
-    return tree
+
+    if root.find('{http://www.w3.org/2000/svg}g'):
+        el = root.find('{http://www.w3.org/2000/svg}g')
+        paths = el.findall('{http://www.w3.org/2000/svg}path')
+        for i in paths:
+            el.remove(i)
+        return tree
+    else:
+        return tree
 
 
 def sort_img_sizes():
@@ -110,7 +118,7 @@ def convert_to_greyscale(img):
 
 
 def convert_to_binary(img):
-    Image.open(img).convert('L').point(lambda p: 255 if p > 0 else p).save(img)
+    Image.open(img).convert('L').point(lambda p: 150 if p <= 4 else p).save(img)
 
 
 def convert_to_binary_thres(img, thres):
@@ -122,8 +130,8 @@ def delete_old_files():
     p1 = 'data_labelled_svg'
     p2 = 'data_labelled_jpg'
     svgs = [f"{p1}/{f}" for f in listdir(p1) if isfile(join(p1, f))]
-    jpgs = [f"{p2}/{f}" for f in listdir(p2) if isfile(join(p2, f))]
-    for f in svgs + jpgs:
+    pngs = [f"{p2}/{f}" for f in listdir(p2) if isfile(join(p2, f))]
+    for f in svgs + pngs:
         os.remove(f)
 
 
@@ -133,7 +141,7 @@ def calc_scale(max_size):
     elif 2000 <= max_size <= 4800:
         return 0.33
     else:
-        return 0.25
+        return 0.2
 
 
 def create_data(sorted_imgs, max_size, to_scale):
@@ -160,32 +168,36 @@ def create_data(sorted_imgs, max_size, to_scale):
         tree_original = remove_baselines(path)
         tree_original.write(f'data_labelled_svg/{file}')
         svg2png(bytestring=open(f'data_labelled_svg/{file}', 'rb').read(), scale=scale,
-                write_to=open(f'data_labelled_jpg/{file_}.jpg', 'wb'))
-        convert_to_greyscale(f'data_labelled_jpg/{file_}.jpg')
+                write_to=open(f'data_labelled_jpg/{file_}.png', 'wb'))
+        #convert_to_binary(f'data_labelled_jpg/{file_}.png')
+
+        convert_to_greyscale(f'data_labelled_jpg/{file_}.png')
 
         tree_labels = extract_baselines_1(path)
         tree_labels.write(f'./data_labelled_svg/{file_}_GT0.svg')
         svg2png(bytestring=open(f'./data_labelled_svg/{file_}_GT0.svg', 'rb').read(),
                 scale=scale,
-                write_to=open(f'data_labelled_jpg/{file_}_GT0.jpg', 'wb'))
+                write_to=open(f'data_labelled_jpg/{file_}_GT0.png', 'wb'))
+
+
 
         tree_labels_1 = create_seperator_class(tree_labels)
 
         tree_labels_2 = copy.deepcopy(tree_labels_1)
 
-        #convert_to_binary(f'data_labelled_jpg/{file_}_GT0.jpg')
+        
 
         tree_labels = extract_baselines_hori(tree_labels_1)
         tree_labels.write(f'./data_labelled_svg/{file_}_GT1.svg')
         svg2png(bytestring=open(f'./data_labelled_svg/{file_}_GT1.svg', 'rb').read(),
                 scale=scale,
-                write_to=open(f'data_labelled_jpg/{file_}_GT1.jpg', 'wb'))
+                write_to=open(f'data_labelled_jpg/{file_}_GT1.png', 'wb'))
 
         tree_labels_2 = extract_baselines_3(tree_labels_2)
         tree_labels_2.write(f'./data_labelled_svg/{file_}_GT2.svg')
         svg2png(bytestring=open(f'./data_labelled_svg/{file_}_GT2.svg', 'rb').read(),
                 scale=scale,
-                write_to=open(f'data_labelled_jpg/{file_}_GT2.jpg', 'wb'))
+                write_to=open(f'data_labelled_jpg/{file_}_GT2.png', 'wb'))
 
 
 
@@ -194,10 +206,10 @@ def create_data(sorted_imgs, max_size, to_scale):
 
 def create_txts_with_paths(split, sorted_dict):
 
-    #data = [os.path.abspath('data_labelled_jpg/'+f) for f in listdir('data_labelled_jpg') if f.find("_GT") == -1]
+    #data = [os.path.abspath('data_labelled_png/'+f) for f in listdir('data_labelled_png') if f.find("_GT") == -1]
 
 
-    data = [os.path.abspath('data_labelled_jpg/'+f.replace('svg', 'jpg')) for f in sorted_dict]
+    data = [os.path.abspath('data_labelled_jpg/'+f.replace('svg', 'png')) for f in sorted_dict]
     split = int(math.ceil(split * len(data)))
     train = data[:split]
     val = data[split:]
@@ -307,12 +319,14 @@ def create_seperator_class(tree):
 
 
 if __name__ == "__main__":
-    #MAX_SIZE = 10000000 # estimated by trial and error
+    MAX_SIZE = 10000000 # estimated by trial and error
     sorted_imgs = sort_img_sizes()
-    #pretty_print_dict(sorted_imgs)
-    #delete_old_files()
-    #create_data(sorted_imgs, MAX_SIZE, True)
-    create_txts_with_paths(0.8, sorted_imgs)
+    pretty_print_dict(sorted_imgs)
+    delete_old_files()
+    create_data(sorted_imgs, MAX_SIZE, True)
+    create_txts_with_paths(0.9, sorted_imgs)
+
+
 
 
 
